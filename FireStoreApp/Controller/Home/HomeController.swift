@@ -32,25 +32,22 @@ class HomeController: UIViewController {
     let firebaseAuth = Auth.auth()
     var user_id: String = "1"
     
+    // refresh control init
+    private let refreshControl = UIRefreshControl()
+    
     // MARK: - Init
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        view.backgroundColor = .lightGray
         
         guard (firebaseAuth.currentUser?.uid) != nil else { return }
         
         user_id = firebaseAuth.currentUser!.uid
         
-        API.shared.getAllProductDocuments {
-            
-            self.products = API.shared.products
-            self.productsCollectionView.reloadData()
-        }
-        
         configureNavigationBar()
         configureSwipeRecognizer()
         configureCollectionView()
+        
+        loadProducts()
     }
     
     // MARK: layout
@@ -65,7 +62,11 @@ class HomeController: UIViewController {
         productsCollectionView.dataSource = self
         productsCollectionView.showsVerticalScrollIndicator = false
         productsCollectionView.backgroundColor = .white
+        productsCollectionView.alwaysBounceVertical = true
         productsCollectionView.register(ProductCollectionViewCell.self, forCellWithReuseIdentifier: product_cell_identifier)
+        
+        productsCollectionView.addSubview(refreshControl)
+        refreshControl.addTarget(self, action: #selector(refreshProducts(_:)), for: .valueChanged)
         
         view.addSubview(productsCollectionView)
         
@@ -115,7 +116,9 @@ class HomeController: UIViewController {
         
         if let name = self.productNameTextField.text {
             
-            let product = Product(id: String(products.count), name: name, user_id: user_id)
+            let id = UUID().uuidString
+            
+            let product = Product(id: id, name: name, user_id: user_id)
             
             API.shared.addProductDocument(product: product)
             
@@ -138,6 +141,8 @@ class HomeController: UIViewController {
         
         addPaneView.backgroundColor = Utils.primaryColor
         
+        productNameTextField.text = ""
+        productNameTextField.placeholder = "product name"
         productNameTextField.frame = CGRect(x: 20, y: addPaneView.frame.height/2 - 20, width: addPaneView.frame.width - 40, height: 40)
         productNameTextField.backgroundColor = .white
         
@@ -196,6 +201,15 @@ class HomeController: UIViewController {
         self.view.addGestureRecognizer(swipeLeft)
     }
     
+    private func loadProducts() {
+        
+        API.shared.getAllProductDocuments {
+            
+            self.products = API.shared.products
+            self.productsCollectionView.reloadData()
+        }
+    }
+    
     private func createSpinnerView() {
         
         let child = SpinnerViewController()
@@ -210,6 +224,18 @@ class HomeController: UIViewController {
             child.willMove(toParent: nil)
             child.view.removeFromSuperview()
             child.removeFromParent()
+        }
+    }
+    
+    @objc private func refreshProducts(_ sender: Any) {
+        
+        refreshControl.attributedTitle = NSAttributedString(string: "Getting products ...", attributes: nil)
+        
+        API.shared.getAllProductDocuments {
+            
+            self.products = API.shared.products
+            self.productsCollectionView.reloadData()
+            self.refreshControl.endRefreshing()
         }
     }
     
@@ -231,7 +257,14 @@ extension HomeController: UICollectionViewDelegate, UICollectionViewDataSource {
         
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: product_cell_identifier, for: indexPath) as! ProductCollectionViewCell
         
-        let product = products[indexPath.item]
+        var product: Product!
+        
+        if searchActive {
+            product = filtered[indexPath.item]
+        } else {
+            product = products[indexPath.item]
+        }
+        
         cell.product = product
         
         cell.delegate = self
@@ -246,10 +279,17 @@ extension HomeController: ProductCellDelegate {
     func didTapDeleteCell(cell: ProductCollectionViewCell) {
         
         guard let indexPath = productsCollectionView.indexPath(for: cell) else { return }
-        products.remove(at: indexPath.item)
-        productsCollectionView.deleteItems(at: [indexPath])
         
-        API.shared.deleteDocument(id: products[indexPath.item].id!)
+        if searchActive {
+            API.shared.deleteDocument(id: filtered[indexPath.item].id!)
+            filtered.remove(at: indexPath.item)
+        } else {
+            API.shared.deleteDocument(id: products[indexPath.item].id!)
+            products.remove(at: indexPath.item)
+        }
+        
+        productsCollectionView.deleteItems(at: [indexPath])
+        loadProducts()
     }
     
     func didTapSelectCell(cell: ProductCollectionViewCell) {
@@ -299,9 +339,9 @@ extension HomeController: UISearchControllerDelegate, UISearchBarDelegate, UISea
         
         filtered = products.filter({ (item) -> Bool in
             
-            let product: NSString = item.name! as NSString
+            let productName: NSString = item.name! as NSString
             
-            return (product.range(of: searchString!, options: NSString.CompareOptions.caseInsensitive).location) != NSNotFound
+            return (productName.range(of: searchString!, options: NSString.CompareOptions.caseInsensitive).location) != NSNotFound
         })
         
         productsCollectionView.reloadData()

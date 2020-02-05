@@ -68,8 +68,17 @@ class ProductCollectionViewCell: UICollectionViewCell {
             guard let product = product else { return }
             
             productNameLabel.text = product.name
-            checkMarkLabel.text = product.checked! ? "✓" : ""
-            alpha = product.checked! ? 1 : 0.8
+            checkMarkLabel.text =  "✓"
+            if product.checked! {
+                
+                checkMarkLabel.textColor = .green
+                checkMarkLabel.alpha = 1.0
+            } else {
+                
+                checkMarkLabel.textColor = .lightGray
+                checkMarkLabel.alpha = 0.2
+            }
+            
         }
     }
     

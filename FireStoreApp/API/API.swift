@@ -134,7 +134,7 @@ class API {
     
     // read documents
     func getAllProductDocuments(completion: @escaping () -> Void ) {
-                
+        
         db.collection("products").getDocuments { (documents_data, error) in
             if let error = error {
                 
@@ -142,6 +142,8 @@ class API {
             } else {
                 
                 if let documents_data = documents_data {
+                    
+                    self.products = []
                     
                     for document in documents_data.documents {
                         
